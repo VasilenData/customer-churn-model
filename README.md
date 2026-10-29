@@ -39,4 +39,4 @@ jupyter notebook notebooks/churn_model.ipynb
 Notebook and data-prep code are being added to this repository.
 
 ---
-Built by [Vasilen Kanchev](https://vasilendata.github.io) · [LinkedIn](https://www.linkedin.com/in/vasilen-kanchev-030878290/)
+Built by [Vasilen Kanchev](https://vasilendata.github.io) · [LinkedIn](https://www.linkedin.com/in/vasilenkanchev/)
