@@ -28,7 +28,11 @@ SERVICES = ["PhoneService", "MultipleLines", "OnlineSecurity", "OnlineBackup",
 
 def load_and_engineer(path: str = DATA) -> pd.DataFrame:
     df = pd.read_csv(path)
+    if not df["Churn"].isin(["Yes", "No"]).all():
+        raise ValueError("Churn labels must be Yes or No; unknown labels cannot become non-churners")
     df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    if (df["TotalCharges"].isna() & (df["tenure"] != 0)).any():
+        raise ValueError("missing or invalid TotalCharges is only permitted for zero-tenure customers")
     df.loc[df["TotalCharges"].isna(), "TotalCharges"] = 0.0  # new customers, tenure == 0
     df["churn"] = (df["Churn"] == "Yes").astype(int)
 
@@ -63,7 +67,7 @@ def main() -> None:
     model = search.best_estimator_
 
     proba = model.predict_proba(X_te)[:, 1]
-    # pick the decision threshold on the TRAIN data only (best F1 via CV is overkill; use 0.5 and report both)
+    # Fixed 0.5 threshold; compare.py tunes a separate policy on training OOF scores only.
     pred = (proba >= 0.5).astype(int)
     base_acc = max(y_te.mean(), 1 - y_te.mean())
     metrics = {

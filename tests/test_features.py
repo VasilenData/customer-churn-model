@@ -1,4 +1,6 @@
-from train import load_and_engineer
+import pandas as pd
+import pytest
+from train import DATA, load_and_engineer
 
 
 def test_engineered_features_and_no_leakage():
@@ -7,3 +9,14 @@ def test_engineered_features_and_no_leakage():
     assert not df.isna().any().any()
     assert {"n_services", "charge_gap", "tenure_bucket", "is_month_to_month", "auto_pay"} <= set(df.columns)
     assert "Churn" not in df.columns and "customerID" not in df.columns
+
+
+@pytest.mark.parametrize("column,value", [("Churn", "Unknown"), ("TotalCharges", "not-a-number")])
+def test_invalid_labels_and_nonzero_tenure_charges_are_not_silently_recoded(tmp_path, column, value):
+    data = pd.read_csv(DATA)
+    row = data[data.tenure > 0].head(1).copy()
+    row[column] = value
+    path = tmp_path / "bad.csv"
+    row.to_csv(path, index=False)
+    with pytest.raises(ValueError):
+        load_and_engineer(path)

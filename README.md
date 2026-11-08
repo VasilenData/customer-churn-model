@@ -32,7 +32,7 @@ flowchart LR
 | F1 (churn class) | 0.635 | n/a |
 | ROC-AUC | **0.844** | 0.5 |
 
-- Cross-validated ROC-AUC on the training set: 0.848, so the test score is not a lucky split.
+- Cross-validated ROC-AUC on the training set: 0.848, reported alongside the held-out score; one split does not establish robustness across populations or time.
 - **Why 76% accuracy, not higher:** the model is class-weighted to catch more churners. Without weighting, accuracy rises to about 80.2% but recall on churners falls to 51.9% (same AUC of about 0.84). For retention, missing churners is the costly error, so I chose recall. The accuracy-only baseline of 73.5% shows why accuracy alone is a weak yardstick on imbalanced data.
 ![ROC curve](outputs/roc_curve.png) ![Feature importance](outputs/feature_importance.png)
 
@@ -47,8 +47,8 @@ flowchart LR
 | Random forest (tuned) | **0.848** | 0.844 | 77.8% | 53.7% | 0.156 |
 | Gradient boosting | 0.844 | 0.841 | 78.3% | 52.3% | 0.162 |
 
-- **The three models are statistically close** (CV standard deviation is about 0.01). I kept the random forest because it had the best cross-validated score, chosen on the training data and not on the test set.
-- **Calibration:** isotonic calibration lowers the Brier score from 0.156 to 0.136, so predicted probabilities can be read as real churn rates (left chart below).
+- **The three observed CV means are close** (fold standard deviation is about 0.01); no paired significance test is reported. I kept the random forest because it had the best cross-validated score, chosen on the training data and not on the test set.
+- **Calibration:** isotonic calibration lowers the Brier score from 0.156 to 0.136, an improvement on this test split; it does not guarantee probability calibration under deployment shift (left chart below).
 - **Permutation importance on held-out data** (drop in AUC when a feature is shuffled): `Contract` 0.022, `tenure` 0.015, `InternetService` 0.012, `is_month_to_month` 0.011.
 
 ![Calibration and threshold](outputs/calibration_and_threshold.png)
@@ -83,3 +83,8 @@ python src/compare.py     # model comparison, calibration, cost-based threshold 
 
 ---
 Built by [Vasilen Kanchev](https://vasilendata.github.io) · [LinkedIn](https://www.linkedin.com/in/vasilenkanchev/)
+
+## Decision-policy checks
+Threshold selection uses training out-of-fold predictions and explicitly considers contacting everyone and nobody. When every offer policy loses value under the illustrative assumptions, it can choose no outreach (represented by a threshold just above 1). Inputs must be aligned, finite and valid; malformed labels and invalid nonzero-tenure charges fail rather than silently changing the target/data.
+
+The stored comparison numbers predate these edge-case regressions; they have not been regenerated here. Random-forest hyperparameters were selected using the training data before the comparison CV, so that CV estimate is not a fully nested model-selection estimate. Test labels are not used to select the decision threshold. The monetary values remain hypothetical, not realized savings.
