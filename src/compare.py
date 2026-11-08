@@ -67,18 +67,33 @@ def net_value(y_true, proba, monthly, threshold):
     contact = proba >= threshold
     saved = contact & (y_true == 1)
     gain = (saved * monthly * VALUE_MONTHS * OFFER_SUCCESS).sum()
-    return float(gain - contact.sum() * OFFER_COST)
+    value = float(gain - contact.sum() * OFFER_COST)
+    if not np.isfinite(value):
+        raise ValueError("utility calculation overflowed; check monetary inputs")
+    return value
 
 
 def select_threshold(y_true, proba, monthly) -> tuple[float, float]:
-    """Optimize the illustrative policy on training OOF scores, including no outreach.
+    """Evaluate every distinct contact set attainable with a probability threshold.
 
     A threshold just above 1 is the explicit contact-nobody policy. Ties prefer
-    the higher threshold, avoiding extra offers with no modeled benefit.
+    the higher threshold, avoiding extra offers with no modeled benefit. Equal
+    scores enter together: a threshold cannot cherry-pick within a tied group.
+    Sorting once and accumulating utility costs O(n log n), without a coarse grid.
     """
-    grid = np.concatenate(([0.0], np.round(np.arange(0.05, 0.95, 0.01), 2), [np.nextafter(1.0, 2.0)]))
-    choices = [(float(t), net_value(y_true, proba, monthly, float(t))) for t in grid]
-    return max(choices, key=lambda pair: (pair[1], pair[0]))
+    nobody = float(np.nextafter(1.0, 2.0))
+    net_value(y_true, proba, monthly, nobody)  # Validate before sorting or broadcasting.
+    y_true, proba, monthly = (np.asarray(values, dtype=float) for values in (y_true, proba, monthly))
+    order = np.argsort(-proba, kind="stable")
+    scores = proba[order]
+    increments = y_true[order] * monthly[order] * VALUE_MONTHS * OFFER_SUCCESS - OFFER_COST
+    cumulative = np.cumsum(increments)
+    if not np.isfinite(cumulative).all():
+        raise ValueError("utility calculation overflowed; check monetary inputs")
+    ends = np.flatnonzero(np.r_[scores[:-1] != scores[1:], True])
+    choices = [(nobody, 0.0)] + [(float(scores[i]), float(cumulative[i])) for i in ends]
+    threshold, _ = max(choices, key=lambda pair: (pair[1], pair[0]))
+    return threshold, net_value(y_true, proba, monthly, threshold)
 
 
 def main():
