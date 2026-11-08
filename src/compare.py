@@ -55,10 +55,30 @@ def models(X):
 
 def net_value(y_true, proba, monthly, threshold):
     """Expected net value of contacting every customer scored at or above the threshold."""
+    y_true, proba, monthly = (np.asarray(values, dtype=float) for values in (y_true, proba, monthly))
+    if any(values.ndim != 1 for values in (y_true, proba, monthly)) or not (len(y_true) == len(proba) == len(monthly)):
+        raise ValueError("labels, probabilities and monthly charges must be aligned one-dimensional arrays")
+    if not len(y_true) or not all(np.isfinite(values).all() for values in (y_true, proba, monthly)):
+        raise ValueError("utility inputs must be nonempty and finite")
+    if not np.isin(y_true, [0, 1]).all() or ((proba < 0) | (proba > 1)).any() or (monthly < 0).any():
+        raise ValueError("expected binary labels, probabilities in [0, 1] and nonnegative charges")
+    if not np.isfinite(threshold) or threshold < 0:
+        raise ValueError("threshold must be finite and nonnegative")
     contact = proba >= threshold
     saved = contact & (y_true == 1)
     gain = (saved * monthly * VALUE_MONTHS * OFFER_SUCCESS).sum()
     return float(gain - contact.sum() * OFFER_COST)
+
+
+def select_threshold(y_true, proba, monthly) -> tuple[float, float]:
+    """Optimize the illustrative policy on training OOF scores, including no outreach.
+
+    A threshold just above 1 is the explicit contact-nobody policy. Ties prefer
+    the higher threshold, avoiding extra offers with no modeled benefit.
+    """
+    grid = np.concatenate(([0.0], np.round(np.arange(0.05, 0.95, 0.01), 2), [np.nextafter(1.0, 2.0)]))
+    choices = [(float(t), net_value(y_true, proba, monthly, float(t))) for t in grid]
+    return max(choices, key=lambda pair: (pair[1], pair[0]))
 
 
 def main():
@@ -92,16 +112,18 @@ def main():
     oof = cross_val_predict(CalibratedClassifierCV(models(X)[best], method="isotonic", cv=5), X_tr, y_tr, cv=cv,
                             method="predict_proba", n_jobs=-1)[:, 1]
     grid = np.round(np.arange(0.05, 0.95, 0.01), 2)
-    tr_vals = [net_value(y_tr.values, oof, X_tr["MonthlyCharges"].values, t) for t in grid]
-    t_star = float(grid[int(np.argmax(tr_vals))])
+    t_star, train_value = select_threshold(y_tr.values, oof, X_tr["MonthlyCharges"].values)
     te_at = lambda t: net_value(y_te.values, p_cal, X_te["MonthlyCharges"].values, t)
     pred_star = (p_cal >= t_star).astype(int)
     decision = {"threshold_chosen_on_train": t_star,
+                "training_policy": "contact nobody" if t_star > 1 else "probability threshold",
+                "training_oof_net_value": round(train_value, 0),
                 "test_net_value_at_threshold": round(te_at(t_star), 0),
                 "test_net_value_at_0.5": round(te_at(0.5), 0),
                 "test_net_value_contact_everyone": round(te_at(0.0), 0),
+                "test_net_value_contact_nobody": 0.0,
                 "test_recall_at_threshold": round(recall_score(y_te, pred_star), 4),
-                "test_precision_at_threshold": round(precision_score(y_te, pred_star), 4),
+                "test_precision_at_threshold": round(precision_score(y_te, pred_star, zero_division=0), 4),
                 "assumptions": {"offer_cost": OFFER_COST, "offer_success_rate": OFFER_SUCCESS, "value_months": VALUE_MONTHS}}
 
     # model-agnostic importance on held-out data
