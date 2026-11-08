@@ -85,6 +85,8 @@ python src/compare.py     # model comparison, calibration, cost-based threshold 
 Built by [Vasilen Kanchev](https://vasilendata.github.io) · [LinkedIn](https://www.linkedin.com/in/vasilenkanchev/)
 
 ## Decision-policy checks
-Threshold selection uses training out-of-fold predictions and explicitly considers contacting everyone and nobody. When every offer policy loses value under the illustrative assumptions, it can choose no outreach (represented by a threshold just above 1). Inputs must be aligned, finite and valid; malformed labels and invalid nonzero-tenure charges fail rather than silently changing the target/data.
+Threshold selection uses training out-of-fold predictions and evaluates every distinct contact set at observed probability breakpoints, plus contacting nobody. Sorting and cumulative utility replace a coarse grid that could miss the best policy (for example, between scores of 0.951 and 0.957). Customers with equal scores enter together; utility ties prefer the higher threshold and fewer contacts. A seeded exhaustive contact-mask oracle checks the optimizer and row-order invariance.
+
+When every offer policy loses value under the illustrative assumptions, it can choose no outreach (represented by a threshold just above 1). Inputs must be aligned, finite and valid; malformed labels and invalid nonzero-tenure charges fail rather than silently changing the target/data. The policy remains a single global threshold under the stated cost assumptions, not an uplift model or an estimate of individual treatment effects.
 
 The stored comparison numbers predate these edge-case regressions; they have not been regenerated here. Random-forest hyperparameters were selected using the training data before the comparison CV, so that CV estimate is not a fully nested model-selection estimate. Test labels are not used to select the decision threshold. The monetary values remain hypothetical, not realized savings.
