@@ -24,7 +24,42 @@ def test_utility_optimizer_can_decline_all_loss_making_offers():
 
 def test_utility_optimizer_can_choose_contact_everyone():
     threshold, value = select_threshold([1, 1], [0.01, 0.02], [100., 100.])
-    assert threshold == 0 and value == 480
+    assert threshold == 0.01 and value == 480
+
+
+def test_optimizer_finds_profitable_policy_between_old_grid_points():
+    threshold, value = select_threshold([1, 0], [0.957, 0.951], [100., 100.])
+    assert threshold == 0.957 and value == 240
+
+
+def test_equal_scores_are_an_indivisible_contact_group():
+    threshold, value = select_threshold([1, 0, 0], [0.9, 0.9, 0.9], [50., 50., 50.])
+    assert threshold > 1 and value == 0
+
+
+def test_zero_gain_prefers_fewer_contacts():
+    threshold, value = select_threshold([1, 1], [0.8, 0.3], [100., 20.])
+    assert threshold == 0.8 and value == 240
+
+
+def test_threshold_optimizer_matches_exhaustive_contact_mask_oracle():
+    """Small seeded cases enumerate all attainable masks independently of sorting/cumulative sums."""
+    rng = np.random.default_rng(47)
+    for size in range(1, 30):
+        for _ in range(10):
+            y = rng.integers(0, 2, size)
+            p = rng.choice([0., 0.013, 0.051, 0.503, 0.951, 0.957, 1.], size=size)
+            monthly = rng.integers(1, 180, size)
+            candidates = [np.nextafter(1.0, 2.0), *set(p)]
+            def oracle(t):
+                return sum((float(monthly[i]) * 12 * 0.25 if y[i] else 0) - 60
+                           for i in range(size) if p[i] >= t)
+            expected_t = max(candidates, key=lambda t: (oracle(t), t))
+            threshold, value = select_threshold(y, p, monthly)
+            assert threshold == expected_t and value == oracle(expected_t)
+            # Row order must not change the chosen contact policy.
+            shuffled = rng.permutation(size)
+            assert select_threshold(y[shuffled], p[shuffled], monthly[shuffled]) == (threshold, value)
 
 
 def test_misaligned_arrays_cannot_broadcast_into_false_savings():
