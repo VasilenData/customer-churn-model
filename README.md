@@ -6,7 +6,7 @@ Random Forest classifier with feature engineering that predicts which telecom su
 
 **Stack:** Python · Pandas · Scikit-Learn · Matplotlib
 
-**Headline:** ROC-AUC 0.84 and 78% recall on churners. A simple logistic regression scores the same AUC as the tuned forest (0.847 vs 0.848 in cross-validation), so the extra complexity buys little; the real lever is the decision threshold (see below).
+**Headline:** ROC-AUC 0.84 and 78% recall on churners. A simple logistic regression scores a similar AUC to the tuned forest (0.847 vs 0.848 in cross-validation), so the extra complexity buys little; the real lever is the decision threshold (see below).
 
 ## The problem
 A retention team cannot call every customer. The model ranks customers by churn risk so the team can focus on the ones most likely to leave.
@@ -76,7 +76,7 @@ python src/compare.py     # model comparison, calibration, cost-based threshold 
 ```
 
 ## Notes and limits
-- Metrics come from one fixed split (`random_state=42`) plus 5-fold CV for tuning. Results vary by a point or two with a different seed.
+- Metrics come from one fixed split (`random_state=42`) plus 5-fold CV for tuning. Other splits may give different results; the committed report does not quantify sensitivity across seeds.
 - Dataset: [IBM telco-customer-churn-on-icp4d](https://github.com/IBM/telco-customer-churn-on-icp4d), a sample dataset, not real production data.
 - The cost model uses assumed, not measured, offer costs and success rates.
 - Next steps: SHAP explanations per customer, a time-based split if dates were available, and an A/B test of the retention offer.
