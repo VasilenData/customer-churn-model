@@ -6,7 +6,9 @@ Random Forest classifier with feature engineering that predicts which telecom su
 
 **Stack:** Python · Pandas · Scikit-Learn · Matplotlib
 
-**Headline:** ROC-AUC 0.84 and 78% recall on churners. A simple logistic regression scores a similar AUC to the tuned forest (0.847 vs 0.848 in cross-validation), so the extra complexity buys little; the real lever is the decision threshold (see below).
+**Latest verified evaluation (11 November 2026):** [Corrected nested logistic evidence](outputs/nested-logistic-20261111/report.json) records ROC-AUC **0.8446** and Brier **0.1363** on 1,409 held-out IBM sample customers. This reuses the previously inspected random split; it is not a new blind or temporal test. The forest results below are historical and predate the corrected nested procedure; the corrected multi-family comparison has not been rerun.
+
+**Historical forest headline:** ROC-AUC 0.84 and 78% recall on churners. A simple logistic regression scores a similar AUC to the tuned forest (0.847 vs 0.848 in cross-validation), so the extra complexity buys little; the real lever is the decision threshold (see below).
 
 ## The problem
 A retention team cannot call every customer. The model ranks customers by churn risk so the team can focus on the ones most likely to leave.
@@ -72,7 +74,7 @@ cd customer-churn-model
 pip install -r requirements.txt
 pytest -q                 # data, feature and cost-function tests
 python src/train.py       # trains, prints metrics, writes outputs/metrics.json and charts (~30 s)
-python src/compare.py     # model comparison, calibration, cost-based threshold (~15 s)
+python src/compare.py     # corrected nested comparison; runtime depends on tuning
 ```
 
 ## Notes and limits
