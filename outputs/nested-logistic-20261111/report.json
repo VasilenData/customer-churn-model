@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "scope": "real full IBM sample; bounded logistic candidates only",
+  "rows": 7043,
+  "train_rows": 5634,
+  "test_rows": 1409,
+  "seed": 42,
+  "selected_model": "logistic_C=1.0",
+  "selection_auc": {
+    "logistic_C=0.1": 0.8481972826478286,
+    "logistic_C=1.0": 0.8481980397136554,
+    "logistic_C=10.0": 0.848186375971232
+  },
+  "threshold": 0.2946185453993379,
+  "test_roc_auc": 0.8446007388462631,
+  "test_brier": 0.13627086785369413,
+  "training_oof_policy_fit_value": 141419.55,
+  "test_illustrative_net_value": 32391.75,
+  "test_illustrative_contact_everyone": -2895.300000000003,
+  "test_contact_nobody": 0.0,
+  "contacted_test_customers": 547,
+  "assumptions": {
+    "offer_cost": 60.0,
+    "offer_success": 0.25,
+    "value_months": 12
+  },
+  "limits": [
+    "Previously inspected fixed random split; not a new blind assessment or temporal validation.",
+    "Cross-fit model selection and calibration exclude each scored customer's labels; threshold maximization still fits the policy on OOF outcomes.",
+    "OOF policy-fit value is not an unbiased estimate of policy value; only final held-out outcomes assess the frozen policy.",
+    "Illustrative utility is not measured savings or retention treatment effect. Historical RF results were not regenerated."
+  ],
+  "source_sha256": "88be4b93fbe0cc83421af1c503794c97c342eca914c1576db7c276e61d61358a",
+  "runtime": {
+    "python": "3.12.14",
+    "numpy": "2.5.4",
+    "pandas": "3.1.1",
+    "scikit_learn": "1.9.1"
+  },
+  "code_sha256": {
+    "nested_demo.py": "4e1e49241c5b8a2cd9107e8e682313ac543ccd8a5f382cf44318f6a74a03515e",
+    "nested.py": "bd962f00bd32b802fc17a15d089d8578f0572ce959a5ba54ca7db40902c82818",
+    "compare.py": "229df6449264c5e7ed519df000f05ef458362426eb760b0be39b12e95161faa2",
+    "train.py": "16e5e7226336ac00277e1e9804757fce1565b8433a05d2b64483d4819d623fbd"
+  }
+}
