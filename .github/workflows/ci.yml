@@ -10,3 +10,8 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pip install ruff && ruff check .
       - run: pytest -q
+      - run: python src/nested_demo.py --out outputs/nested-logistic-ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nested-logistic-evidence
+          path: outputs/nested-logistic-ci/
