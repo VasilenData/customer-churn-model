@@ -1,6 +1,6 @@
 """Model comparison, calibration and a cost-based decision threshold for the churn model.
 
-Run: python src/compare.py        (writes outputs/model_comparison.json and two charts)
+Run: python src/compare.py        (writes outputs/nested_model_comparison.json and a calibration chart)
 
 The business assumptions (offer cost, offer success rate, customer lifetime value) are
 ILLUSTRATIVE parameters, set at the top of this file. Change them to match a real business.
@@ -19,7 +19,9 @@ from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassif
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, f1_score, precision_score, recall_score, roc_auc_score
-from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, train_test_split
+
+from nested import nested_policy_scores
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -40,13 +42,16 @@ def preprocessor(X, scale):
 
 
 def models(X):
-    with open(os.path.join(OUT, "metrics.json")) as f:
-        best = {k.split("__", 1)[1]: v for k, v in json.load(f)["best_params"].items()}
+    # Tune inside each caller's fitting partition, never import globally tuned parameters.
+    forest = Pipeline([("pre", preprocessor(X, False)),
+                       ("m", RandomForestClassifier(random_state=SEED, n_jobs=1, n_estimators=200))])
+    forest_search = GridSearchCV(forest, {"m__max_depth": [6, 10], "m__min_samples_leaf": [1, 5]},
+                               cv=StratifiedKFold(3, shuffle=True, random_state=SEED), scoring="roc_auc",
+                               n_jobs=1, error_score="raise")
     return {
         "Logistic regression": Pipeline([("pre", preprocessor(X, True)),
                                          ("m", LogisticRegression(max_iter=2000, class_weight="balanced"))]),
-        "Random forest (tuned)": Pipeline([("pre", preprocessor(X, False)),
-                                           ("m", RandomForestClassifier(random_state=SEED, n_jobs=-1, **best))]),
+        "Random forest (nested tuning)": forest_search,
         "Gradient boosting": Pipeline([("pre", preprocessor(X, False)),
                                        ("m", HistGradientBoostingClassifier(random_state=SEED, class_weight="balanced",
                                                                             max_depth=4, learning_rate=0.05, max_iter=200))]),
@@ -102,9 +107,10 @@ def main():
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, stratify=y, random_state=SEED)
     cv = StratifiedKFold(5, shuffle=True, random_state=SEED)
 
-    rows, fitted = [], {}
+    rows, fitted, selection_auc = [], {}, {}
     for name, pipe in models(X).items():
         cv_auc = cross_val_score(pipe, X_tr, y_tr, cv=cv, scoring="roc_auc", n_jobs=-1)
+        selection_auc[name] = float(cv_auc.mean())
         pipe.fit(X_tr, y_tr)
         p = pipe.predict_proba(X_te)[:, 1]
         pred = (p >= 0.5).astype(int)
@@ -113,7 +119,7 @@ def main():
                      "test_roc_auc": round(roc_auc_score(y_te, p), 4), "test_recall": round(recall_score(y_te, pred), 4),
                      "test_precision": round(precision_score(y_te, pred), 4), "test_f1": round(f1_score(y_te, pred), 4),
                      "brier": round(brier_score_loss(y_te, p), 4)})
-    best = max(rows, key=lambda r: r["cv_roc_auc_mean"])["model"]  # chosen on CV, not on the test set
+    best = max(sorted(selection_auc), key=selection_auc.get)  # chosen on CV, not on the test set
     pipe, p_raw = fitted[best]
 
     # calibration of the chosen model (fit on training data only)
@@ -123,9 +129,7 @@ def main():
              "brier_calibrated": round(brier_score_loss(y_te, p_cal), 4)}
 
     # cost-based threshold, chosen on training-set out-of-fold scores, evaluated on the test set
-    from sklearn.model_selection import cross_val_predict
-    oof = cross_val_predict(CalibratedClassifierCV(models(X)[best], method="isotonic", cv=5), X_tr, y_tr, cv=cv,
-                            method="predict_proba", n_jobs=-1)[:, 1]
+    oof, fold_audit = nested_policy_scores(models(X_tr), X_tr, y_tr, outer_splits=5, inner_splits=3, seed=SEED)
     grid = np.round(np.arange(0.05, 0.95, 0.01), 2)
     t_star, train_value = select_threshold(y_tr.values, oof, X_tr["MonthlyCharges"].values)
     te_at = lambda t: net_value(y_te.values, p_cal, X_te["MonthlyCharges"].values, t)
@@ -147,8 +151,10 @@ def main():
     importance = {k: round(float(v), 4) for k, v in imp.head(8).items()}
 
     result = {"comparison": rows, "chosen_by_cv": best, "calibration": calib, "decision": decision,
-              "permutation_importance_auc_drop": importance}
-    json.dump(result, open(os.path.join(OUT, "model_comparison.json"), "w"), indent=2)
+              "permutation_importance_auc_drop": importance, "policy_crossfit": fold_audit,
+              "protocol": {"version": 2, "selection": "RF tuning inside each fit; policy scores cross-fit model selection and calibration",
+                           "limits": "Random stratified sample, not temporal validation; selected CV mean is not an unbiased winner estimate. Utility is illustrative."}}
+    json.dump(result, open(os.path.join(OUT, "nested_model_comparison.json"), "w"), indent=2)
     print(json.dumps(result, indent=2))
 
     # charts
@@ -162,7 +168,7 @@ def main():
     ax[1].plot(grid, te_vals); ax[1].axvline(t_star, color="grey", ls="--", label=f"threshold {t_star} (chosen on train)")
     ax[1].set_xlabel("Decision threshold"); ax[1].set_ylabel("Illustrative net value (test set)")
     ax[1].set_title("Cost-based threshold"); ax[1].legend()
-    plt.tight_layout(); plt.savefig(os.path.join(OUT, "calibration_and_threshold.png"), dpi=120); plt.close()
+    plt.tight_layout(); plt.savefig(os.path.join(OUT, "nested_calibration_and_threshold.png"), dpi=120); plt.close()
 
 
 if __name__ == "__main__":

@@ -28,6 +28,9 @@ SERVICES = ["PhoneService", "MultipleLines", "OnlineSecurity", "OnlineBackup",
 
 def load_and_engineer(path: str = DATA) -> pd.DataFrame:
     df = pd.read_csv(path)
+    if df["customerID"].isna().any() or df["customerID"].astype(str).str.strip().eq("").any() or df["customerID"].duplicated().any():
+        raise ValueError("customer identities must be unique and nonempty before splitting")
+    df = df.set_index("customerID")
     if not df["Churn"].isin(["Yes", "No"]).all():
         raise ValueError("Churn labels must be Yes or No; unknown labels cannot become non-churners")
     df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
@@ -43,7 +46,7 @@ def load_and_engineer(path: str = DATA) -> pd.DataFrame:
     df["tenure_bucket"] = pd.cut(df["tenure"], [-1, 6, 12, 24, 48, 100], labels=["0-6", "7-12", "13-24", "25-48", "49+"]).astype(str)
     df["is_month_to_month"] = (df["Contract"] == "Month-to-month").astype(int)
     df["auto_pay"] = df["PaymentMethod"].str.contains("automatic").astype(int)
-    return df.drop(columns=["customerID", "Churn"])
+    return df.drop(columns=["Churn"])
 
 
 def build_pipeline(X: pd.DataFrame) -> Pipeline:
